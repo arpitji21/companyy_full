@@ -1,0 +1,85 @@
+databases:
+  - name: orbit-db
+    plan: free
+    databaseName: larkai_orbit
+    user: larkai
+
+services:
+  - type: web
+    name: orbit-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: orbit-db
+          property: connectionString
+      - key: DB_ECHO
+        value: "false"
+      # Comma-separated list of allowed origins. Add your Vercel frontend
+      # URL(s) here once the frontend is deployed, e.g.
+      # https://orbit-frontend.vercel.app,http://localhost:5173
+      - key: BACKEND_CORS_ORIGINS
+        sync: false
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "30"
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: "7"
+      # REDIS_URL is now required, not optional: it's how real-time
+      # notification push (app/websocket/) fans an event out to whichever
+      # backend instance is holding the recipient's WebSocket connection.
+      # Add a Render Key Value instance and point this at it. Without it,
+      # the app still runs fine — NotificationService.publish_notification()
+      # no-ops on a missing/unreachable Redis — but pushes silently stop
+      # working and the frontend falls back to its periodic poll.
+      #
+      # Note for the free web service plan specifically: it runs a single
+      # instance (so the pub/sub fan-out isn't even exercised yet — every
+      # WS connection and every notification are on the same process) and
+      # spins down after 15 minutes idle, which drops all open WebSocket
+      # connections. That's expected and handled: the frontend's reconnect
+      # logic (useNotificationSocket) treats a dropped socket the same way
+      # whether the cause is idle spin-down, a redeploy, or a network blip.
+      # Celery is unrelated to this and still isn't wired into any request
+      # path — leave CELERY_* unset until background jobs are added.
+      - key: REDIS_URL
+        sync: false
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+      # Optional S3-compatible object storage
+      - key: S3_ENDPOINT_URL
+        sync: false
+      - key: S3_BUCKET_NAME
+        value: larkai-orbit-documents
+      - key: S3_ACCESS_KEY
+        sync: false
+      - key: S3_SECRET_KEY
+        sync: false
+      - key: S3_REGION
+        value: us-east-1
+      # Optional LLM provider keys — leave blank to use the graceful
+      # fallback response instead of erroring.
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: DEFAULT_LLM_PROVIDER
+        value: openai
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "120"
